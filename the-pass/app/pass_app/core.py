@@ -13,6 +13,8 @@ auto-returns; only rescanning a card puts its task back. No scores, streaks, nag
 """
 from __future__ import annotations
 
+import datetime as dt
+
 import re
 import secrets
 import threading
@@ -280,6 +282,49 @@ class Pass:
         a = self.printers.adapters[device]
         return {"png": path, "adapter": a.name, "target": a.target,
                 "note": "sent in the background; see GET /api/printers for the result"}
+
+    def label_diagnostic(self, variant: str = "text", density: int | None = None,
+                         speed: int | None = None, band_rows: int | None = None,
+                         thin: float | None = None, rows: int = 40,
+                         invert: bool | None = None) -> dict:
+        """Raw TSPL diagnostics on the label printer. Synchronous: waits for the USB-drop
+        watch so the answer says whether the printer reset. Changes no tasks."""
+        from .printers import Tspl, describe_tspl, tspl_bitmap_job, tspl_diag_job, usb_info
+        a = self.printers.adapters["label"]
+        if not isinstance(a, Tspl):
+            raise PassError(f"label printer adapter is {a.name}, not tspl")
+        if variant == "query":
+            return {"variant": "query", "target": a.target, **a.query()}
+        jo = dict(a.job_opts)
+        if invert is not None:
+            jo["invert"] = invert
+        if variant == "card":
+            for k, v in (("density", density), ("speed", speed), ("band_rows", band_rows), ("thin", thin)):
+                if v is not None:
+                    jo[k] = v
+            img = render.card_label(code="CTEST23", title="Label printer test", steps=0,
+                                    notes="If this QR scans as CTEST23, cards are good.")
+            data = tspl_bitmap_job(img, **jo)
+        elif variant in ("text", "bitmap", "solid"):
+            keep = {k: jo[k] for k in ("width_mm", "height_mm", "gap_mm", "invert") if k in jo}
+            data = tspl_diag_job(variant, density=density, speed=speed, rows=rows, **keep)
+        else:
+            raise PassError("variant must be text, bitmap, card, solid or query")
+        rec = {"file": f"diagnostic:{variant}", "adapter": a.name, "target": a.target,
+               "at": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
+        try:
+            res = a.send_raw(data, raise_on_drop=False)
+        except OSError as e:
+            res = {"ok": False, "bytes": len(data), "result": f"{type(e).__name__}: {e}"}
+        rec.update(ok=res["ok"], result=res["result"])
+        self.printers.history = (self.printers.history + [rec])[-50:]
+        out = {"variant": variant, **res, "job": describe_tspl(data)}
+        if a.device or not a.host:
+            try:
+                out["usb"] = usb_info(a.resolve_device())
+            except OSError:
+                pass
+        return out
 
     def _info_slip(self, kind, title, body="", project_id=None, task_id=None):
         code = self._code("S")

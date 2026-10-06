@@ -26,8 +26,12 @@ and port 9100. Each slip goes out as a 576-dot raster image followed by a partia
 because Home Assistant's own ESC/POS integration is talking to it, the send is retried 3 times.
 
 **Label (Polono PL80E, USB).** The default is `label_printer: tspl_usb` with `label_device: /dev/usb/lp0`.
-Cards are drawn at the PL80E's native page size, 100 x 150 mm (800 x 1200 dots), and sent as one TSPL
-`BITMAP` job. The TSPL settings are the same as Polono's own driver: GAP 3 mm, SPEED 5, DENSITY 10.
+Cards are drawn at the PL80E's native page size, 100 x 150 mm (800 x 1200 dots). They go out as TSPL with the same
+header Polono's own driver uses (SIZE, GAP 3 mm, DIRECTION, REFERENCE, SET TEAR, SPEED, DENSITY, CLS). The bitmap is
+split into 200-row `BITMAP` bands (`label_band_rows`), then `PRINT 1,1`.
+- **The printer resets mid-print** (judder, beep, nothing comes out). That's a power spike from big solid black
+  areas. Keep `label_thin` at 0.5 and lower `label_density` (8) and `label_speed` (3). The status page reports
+  these prints as failed ("dropped off USB … it reset").
 - If cards come out as a negative (black background), turn on `label_invert`.
 - If they're too light, raise `label_density`, which goes up to 15.
 - If labels drift across the gap, check `label_gap_mm`. You can also hold the printer's feed button to
@@ -40,8 +44,19 @@ Cards are drawn at the PL80E's native page size, 100 x 150 mm (800 x 1200 dots),
 ```
 curl -X POST http://192.168.1.92:8787/api/printers/test -H 'Content-Type: application/json' -d '{"device":"label"}'
 curl -X POST http://192.168.1.92:8787/api/printers/test -H 'Content-Type: application/json' -d '{"device":"receipt"}'
-curl http://192.168.1.92:8787/api/printers      # reachability + last send results
+curl http://192.168.1.92:8787/api/printers      # reachability, USB id, last send results
 ```
+
+**Label diagnostics** (`POST /api/printers/label-diagnostic`). These wait about 5 s and report whether the
+printer reset:
+
+| body | prints |
+|---|---|
+| `{"variant":"text"}` | SIZE/GAP/CLS + a box + "THE PASS TEST" text. No bitmap. |
+| `{"variant":"bitmap"}` | The same plus one small 200x200 BITMAP. |
+| `{"variant":"card","density":6,"speed":2}` | The real test card, with optional `density`/`speed`/`band_rows`/`thin` overrides. |
+| `{"variant":"solid","rows":40}` | Text plus a full-width black bar. A power stress test that may reset a weak printer. |
+| `{"variant":"query"}` | Nothing. Asks the printer for its status byte and model name (many clones don't answer). |
 
 Every printout is also saved as a PNG under `/share/the-pass/out/`. The newest 3000 are kept.
 

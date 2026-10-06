@@ -36,7 +36,8 @@ def options_to_env(o: dict) -> dict[str, str]:
     lmode = o.get("label_printer", "tspl_usb")
     if lmode == "tspl_usb":
         q = urlencode({
-            "density": o.get("label_density", 10), "speed": o.get("label_speed", 5),
+            "density": o.get("label_density", 8), "speed": o.get("label_speed", 3),
+            "band_rows": o.get("label_band_rows", 200), "thin": o.get("label_thin", 0.5),
             "gap_mm": o.get("label_gap_mm", 3), "invert": int(bool(o.get("label_invert", False))),
             "width_mm": o.get("label_width_mm", 100), "height_mm": o.get("label_height_mm", 150),
         })

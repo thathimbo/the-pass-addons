@@ -25,6 +25,12 @@ configuration:
   label_invert:
     name: Invert label bitmap
     description: Turn on only if cards come out as a negative (black background).
+  label_band_rows:
+    name: Bitmap band height (rows)
+    description: The card is sent as several TSPL BITMAP commands this many dot-rows tall (0 = one big command). 200 suits small printer buffers.
+  label_thin:
+    name: Solid-area limit
+    description: Rows burning more than this fraction of dots get their solid areas hatched 50%, so the printer is not overloaded (0 = off). 0.5 is safe.
   cups_queue:
     name: CUPS queue name (cups mode only)
   cups_server:

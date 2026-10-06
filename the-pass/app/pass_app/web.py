@@ -72,6 +72,16 @@ class ReminderIn(BaseModel):
     source: str = ""
 
 
+class LabelDiagIn(BaseModel):
+    variant: str = "text"        # text | bitmap | card | solid | query
+    density: Optional[int] = None
+    speed: Optional[int] = None
+    band_rows: Optional[int] = None
+    thin: Optional[float] = None
+    rows: int = 40
+    invert: Optional[bool] = None
+
+
 class NotificationIn(BaseModel):
     title: str
     body: str = ""
@@ -263,6 +273,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def printer_test(body: PrinterTestIn):
         """Print a test card (label) or test slip (receipt). Nothing else changes."""
         return core.print_test(body.device)
+
+    @app.post("/api/printers/label-diagnostic", tags=["printing"], dependencies=[Depends(auth)])
+    def label_diagnostic(body: Optional[LabelDiagIn] = None):
+        """Raw TSPL diagnostic on the label printer (no tasks change). variant:
+        text = SIZE/GAP/CLS + BOX + TEXT + PRINT 1, no bitmap; bitmap = same + a 200x200
+        BITMAP; card = the real test card with optional density/speed/band_rows/thin
+        overrides; solid = text + a full-width black BAR `rows` tall (power stress);
+        query = ask the printer for status/model (prints nothing). Waits ~5 s to see
+        whether the printer dropped off USB (reset) and says so."""
+        b = body or LabelDiagIn()
+        return core.label_diagnostic(b.variant, b.density, b.speed, b.band_rows, b.thin, b.rows, b.invert)
 
     @app.get("/api/printouts", tags=["printing"])
     def printouts(limit: int = 30):

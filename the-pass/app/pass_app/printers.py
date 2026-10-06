@@ -9,13 +9,17 @@ goes to the adapter configured for that device (receipt = slips, label = cards):
   tspl:/dev/usb/lp0?opts               TSPL BITMAP job written to a USB printer device node
   tspl:auto?opts                       first /dev/usb/lp* that exists
   tspl://HOST[:PORT]?opts              same TSPL job over raw TCP (network label printers)
-        opts: width_mm=100 height_mm=150 gap_mm=3 density=10 speed=5 direction=0
-              invert=0 threshold=160 dpmm=8 tear=1
+        opts: width_mm=100 height_mm=150 gap_mm=3 density=8 speed=3 direction=0
+              invert=0 threshold=160 dpmm=8 tear=1 band_rows=200 thin=0.5 watch=5
   cups://QUEUE[@HOST:PORT]             `lp [-h HOST:PORT] -d QUEUE -o fit-to-page file.png`
 
-TSPL defaults mirror Polono's own PL80E CUPS filter: SIZE 100x150 mm, GAP 3 mm, SPEED 5,
-DENSITY 10, DIRECTION 0,0, REFERENCE 0,0, SET TEAR ON, CLS, BITMAP x,y,wbytes,h,1,<data>,
+The TSPL header mirrors Polono's own PL80E CUPS filter: SIZE 100x150 mm, GAP 3 mm,
+DIRECTION 0,0, REFERENCE 0,0, SET TEAR ON, SPEED, DENSITY, CLS, BITMAP x,y,wbytes,h,1,<data>,
 PRINT 1,n. BITMAP data is 1 bit per dot, MSB first, bit 0 = burn a dot (TSC spec).
+v0.2.1: the bitmap is sent in 200-row bands, solid areas in rows over 50% black are
+hatched (peak heater current), density/speed default lower (8/3). After each USB
+write we watch the device node; if the printer drops off USB (it reset), the job is
+reported as failed instead of "wrote N bytes".
 
 Sending runs on one background worker so a slow/offline printer never blocks a scan,
 and printouts keep their order. Failures are logged and kept in `history`.
@@ -30,13 +34,14 @@ import os
 import queue
 import re
 import socket
+import stat
 import subprocess
 import threading
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 log = logging.getLogger("pass.printers")
 
@@ -180,41 +185,178 @@ def _num(v: float) -> str:
     return f"{v:g}"
 
 
+def thin_solids(bw: Image.Image, max_row: float = 0.5, edge: int = 2) -> Image.Image:
+    """Peak-current guard for thermal heads.
+
+    A row that would burn more than `max_row` of its dots at once (a solid bar, a big black
+    block) gets the INSIDE of its solid areas hatched 50% (checkerboard). Every edge keeps
+    a solid rim `edge` dots wide, so shapes and text stay crisp. Rows under the limit (text,
+    QR codes, thin rules) are left exactly as they are. 0 disables it.
+    """
+    if not max_row or max_row <= 0 or max_row >= 1:
+        return bw
+    L = bw.convert("L")
+    W, H = L.size
+    limit = max_row * W
+    raw = bytearray(L.tobytes())
+    heavy = [y for y in range(H) if raw[y * W:(y + 1) * W].count(0) > limit]
+    if not heavy:
+        return bw
+    padded = Image.new("L", (W + 2 * edge, H + 2 * edge), 255)  # outside the label counts as white
+    padded.paste(L, (edge, edge))
+    inner = padded.filter(ImageFilter.MaxFilter(2 * edge + 1)).crop(
+        (edge, edge, edge + W, edge + H)).tobytes()  # 0 = black with >= `edge` black all around
+    for y in heavy:
+        row = y * W
+        for x in range((y & 1), W, 2):
+            if inner[row + x] == 0:
+                raw[row + x] = 255
+    return Image.frombytes("L", (W, H), bytes(raw)).point(lambda v: 255 if v >= 128 else 0, mode="1")
+
+
+def _tspl_head(width_mm, height_mm, gap_mm, density=None, speed=None, direction=0,
+               tear=True, full=True) -> list[str]:
+    lines = [f"SIZE {_num(width_mm)} mm,{_num(height_mm)} mm", f"GAP {_num(gap_mm)} mm,0 mm"]
+    if full:
+        lines += [f"DIRECTION {direction},0", "REFERENCE 0,0", "SET TEAR ON" if tear else "SET TEAR OFF"]
+    if speed is not None:
+        lines.append(f"SPEED {speed}")
+    if density is not None:
+        lines.append(f"DENSITY {density}")
+    lines.append("CLS")
+    return lines
+
+
 def tspl_bitmap_job(img: Image.Image, width_mm: float = 100, height_mm: float = 150,
-                    gap_mm: float = 3, density: int = 10, speed: int = 5, direction: int = 0,
+                    gap_mm: float = 3, density: int = 8, speed: int = 3, direction: int = 0,
                     invert: bool = False, threshold: int = 160, dpmm: int = 8,
-                    copies: int = 1, tear: bool = True) -> bytes:
-    """One full-label TSPL job. The image is fitted to the label's dot grid
-    (100 x 150 mm @ 8 dots/mm = 800 x 1200; the card renderer already draws at that size)."""
+                    copies: int = 1, tear: bool = True, band_rows: int = 200,
+                    thin: float = 0.5, margin_rows: int = 2) -> bytes:
+    """One full-label TSPL job.
+
+    * The image is fitted to the label's dot grid (100 x 150 mm @ 8 dots/mm = 800 x 1200;
+      the card renderer already draws at that size), keeping `margin_rows` clear at the
+      bottom so the bitmap never touches the label edge (SIZE rounding on clones).
+    * `thin_solids` caps per-row heater load (see above).
+    * The bitmap goes as several BITMAP commands of `band_rows` rows (0 = one command).
+      All-white bands are skipped (CLS already cleared the buffer). Smaller commands
+      suit the small receive buffers on cheap firmwares.
+    * Starts with a bare CRLF to resync a parser left mid-BITMAP by an aborted job.
+    """
     w = int(width_mm * dpmm) // 8 * 8
-    h = int(height_mm * dpmm)
+    h = int(height_mm * dpmm) - max(0, margin_rows)
     bw = to_1bit(fit_to(img, w, h), threshold)
+    bw = thin_solids(bw, thin)
+    wb = w // 8
     data = bw.tobytes()  # PIL '1': bit 1 = white = no dot, MSB first: exactly TSPL polarity
     if invert:           # for firmware that expects 1 = dot
         data = bytes(b ^ 0xFF for b in data)
-    lines = [
-        f"SIZE {_num(width_mm)} mm,{_num(height_mm)} mm",
-        f"GAP {_num(gap_mm)} mm,0 mm",
-        f"DIRECTION {direction},0",
-        "REFERENCE 0,0",
-        "SET TEAR ON" if tear else "SET TEAR OFF",
-        f"SPEED {speed}",
-        f"DENSITY {density}",
-        "CLS",
-    ]
-    head = ("\r\n".join(lines) + "\r\n" + f"BITMAP 0,0,{w // 8},{h},1,").encode("ascii")
-    return head + data + f"\r\nPRINT 1,{copies}\r\n".encode("ascii")
+    white = b"\x00" if invert else b"\xff"
+    out = bytearray(b"\r\n")
+    out += ("\r\n".join(_tspl_head(width_mm, height_mm, gap_mm, density, speed, direction, tear))
+            + "\r\n").encode("ascii")
+    step = band_rows if band_rows and band_rows > 0 else h
+    for top in range(0, h, step):
+        rows = min(step, h - top)
+        chunk = data[top * wb:(top + rows) * wb]
+        if band_rows and chunk == white * len(chunk):
+            continue
+        out += f"BITMAP 0,{top},{wb},{rows},1,".encode("ascii") + chunk + b"\r\n"
+    out += f"PRINT 1,{copies}\r\n".encode("ascii")
+    return bytes(out)
+
+
+def _diag_bitmap(size: int = 200) -> Image.Image:
+    """Small test pattern: frame, diagonals, a checker patch and 'OK'."""
+    im = Image.new("L", (size, size), 255)
+    d = ImageDraw.Draw(im)
+    d.rectangle([0, 0, size - 1, size - 1], outline=0, width=4)
+    d.line([0, 0, size - 1, size - 1], fill=0, width=3)
+    d.line([0, size - 1, size - 1, 0], fill=0, width=3)
+    for y in range(16, 64, 8):
+        for x in range(16 + (y // 8 % 2) * 8, 64, 16):
+            d.rectangle([x, y, x + 7, y + 7], fill=0)
+    d.text((size - 70, size - 50), "OK", fill=0, font=ImageFont.load_default(size=36))
+    return im
+
+
+def tspl_diag_job(variant: str = "text", width_mm: float = 100, height_mm: float = 150,
+                  gap_mm: float = 3, density: int | None = None, speed: int | None = None,
+                  invert: bool = False, rows: int = 40, **_ignored) -> bytes:
+    """Diagnostic jobs that need no card:
+      text    SIZE/GAP/CLS + BOX + TEXT + PRINT 1 (no bitmap at all)
+      bitmap  same + one 200x200 BITMAP (5 KB)
+      solid   same as text + a full-width black block `rows` tall (heater power stress)
+    """
+    lines = ["", *_tspl_head(width_mm, height_mm, gap_mm, density, speed, full=False),
+             "BOX 40,40,760,330,4",
+             'TEXT 72,80,"3",0,2,2,"THE PASS TEST"',
+             f'TEXT 72,180,"2",0,1,1,"TSPL {variant} diagnostic"',
+             f'TEXT 72,230,"2",0,1,1,"d={density if density is not None else "-"} s={speed if speed is not None else "-"}"']
+    out = bytearray(("\r\n".join(lines) + "\r\n").encode("ascii"))
+    if variant == "bitmap":
+        bw = to_1bit(_diag_bitmap(200))
+        data = bw.tobytes()
+        if invert:
+            data = bytes(b ^ 0xFF for b in data)
+        out += b"BITMAP 300,400,25,200,1," + data + b"\r\n"
+    elif variant == "solid":
+        rows = max(1, min(400, int(rows)))
+        out += f"BAR 0,400,{int(width_mm * 8) // 8 * 8},{rows}\r\n".encode("ascii")
+    elif variant != "text":
+        raise ValueError(f"unknown diagnostic variant: {variant}")
+    out += b"PRINT 1\r\n"
+    return bytes(out)
+
+
+def describe_tspl(data: bytes, limit: int = 1500) -> str:
+    """Readable view of a TSPL job: commands as text, binary payloads as <N bytes>."""
+    out, i, n = [], 0, len(data)
+    while i < n and sum(map(len, out)) < limit:
+        if data.startswith((b"BITMAP", b"BMPCPB"), i):
+            p, ok = i, True
+            for _ in range(5):
+                p = data.find(b",", p) + 1
+                if p == 0:
+                    ok = False
+                    break
+            if ok:
+                head = data[i:p].decode("ascii", "replace")
+                try:
+                    _, _, wb, h, _ = head[len("BITMAP "):-1].split(",")
+                    size = int(wb) * int(h)
+                    out.append(f"{head}<{size} bytes>")
+                    i = p + size
+                    if data.startswith(b"\r\n", i):
+                        i += 2
+                    continue
+                except ValueError:
+                    pass
+        j = data.find(b"\r\n", i)
+        j = n if j < 0 else j
+        out.append(data[i:j].decode("ascii", "replace"))
+        i = j + 2
+    return " | ".join(out)
+
+
+_LP_STATUS = {0x01: "head open", 0x02: "paper jam", 0x04: "out of paper", 0x08: "out of ribbon",
+              0x10: "paused", 0x20: "printing", 0x40: "cover open", 0x80: "other error"}
 
 
 class Tspl:
     name = "tspl"
 
     def __init__(self, device: str | None = None, host: str | None = None, port: int = 9100,
-                 retries: int = 3, timeout: float = 10.0, **job_opts):
+                 retries: int = 3, timeout: float = 10.0, watch: float | None = None, **job_opts):
         self.device, self.host, self.port = device, host, port
+        # Real device nodes get the 5 s reset watch and the char-device guard; plain files
+        # (tests, a capture file) don't.
+        self.is_node = not host and (device or "auto") == "auto" or str(device).startswith("/dev/")
         self.retries, self.timeout = retries, timeout
+        self.watch = watch if watch is not None else (5.0 if self.is_node else 0.0)
         self.job_opts = job_opts
         self.target = f"{host}:{port}" if host else (device or "auto")
+        self._lock = threading.Lock()
 
     def resolve_device(self) -> str:
         if self.device and self.device != "auto":
@@ -228,27 +370,105 @@ class Tspl:
         return tspl_bitmap_job(img, **self.job_opts)
 
     def send(self, path, img) -> str:
-        data = self.job(img)
+        return self.send_raw(self.job(img))["result"]
+
+    def _identity(self, dev: str):
+        try:
+            st = os.stat(dev)
+            return (st.st_ino, st.st_rdev, st.st_ctime_ns)
+        except OSError:
+            return None
+
+    def _watch_drop(self, dev: str, before) -> float | None:
+        """After a job, watch the device node: a printer that resets (brown-out, firmware
+        crash) drops off USB within a second or two and comes back as a new node."""
+        end = time.monotonic() + max(0.0, self.watch)
+        t0 = time.monotonic()
+        while time.monotonic() < end:
+            now = self._identity(dev)
+            if now is None or (before and now[:2] != before[:2]) or (before and now[0] != before[0]):
+                return round(time.monotonic() - t0, 2)
+            time.sleep(0.1)
+        return None
+
+    def send_raw(self, data: bytes, raise_on_drop: bool = True) -> dict:
+        """Write a ready-made TSPL job. Returns {ok, result, bytes, dropped_after_s}."""
         if self.host:
             _send_tcp(self.host, self.port, data, self.timeout, self.retries)
-            return f"sent {len(data)} bytes to {self.target}"
-        dev = self.resolve_device()
-        last = None
-        for attempt in range(max(1, self.retries)):
-            try:
-                fd = os.open(dev, os.O_WRONLY)
+            return {"ok": True, "bytes": len(data), "result": f"sent {len(data)} bytes to {self.target}"}
+        with self._lock:
+            dev = self.resolve_device()
+            last = None
+            for attempt in range(max(1, self.retries)):
                 try:
-                    view = memoryview(data)
-                    while view:
-                        n = os.write(fd, view[:16384])
-                        view = view[n:]
-                finally:
-                    os.close(fd)
-                return f"wrote {len(data)} bytes to {dev}"
-            except OSError as e:  # EBUSY / ENODEV during a USB re-enumeration
-                last = e
-                time.sleep(min(8, 2 ** attempt))
-        raise OSError(f"{dev}: {last}")
+                    if self.is_node and not stat.S_ISCHR(os.stat(dev).st_mode):
+                        # a stale regular file where the node was would swallow the job
+                        raise OSError(f"{dev} is not a character device (printer dropped off USB?)")
+                    before = self._identity(dev)
+                    fd = os.open(dev, os.O_WRONLY)
+                    try:
+                        view = memoryview(data)
+                        while view:
+                            n = os.write(fd, view[:4096])
+                            view = view[n:]
+                    finally:
+                        os.close(fd)
+                    break
+                except OSError as e:  # EBUSY / ENODEV during a USB re-enumeration
+                    last = e
+                    if attempt + 1 >= max(1, self.retries):
+                        raise OSError(f"{dev}: {last}")
+                    time.sleep(min(8, 2 ** attempt))
+            dropped = self._watch_drop(dev, before)
+        res = {"ok": dropped is None, "bytes": len(data), "dropped_after_s": dropped,
+               "result": f"wrote {len(data)} bytes to {dev}"}
+        if dropped is not None:
+            res["result"] += (f", then the printer dropped off USB {dropped}s later (it reset mid-job: "
+                              "usually power sag from heavy black areas, or a firmware fault)")
+            if raise_on_drop:
+                raise PrinterReset(res["result"])
+        return res
+
+    def query(self) -> dict:
+        """Best effort, prints nothing: TSPL <ESC>!? status byte and ~!T model name.
+        Many clones are write-only over USB, so silence is not an error."""
+        out = {}
+        if self.host:
+            return {"error": "query only implemented for USB"}
+        dev = self.resolve_device()
+        with self._lock:
+            fd = os.open(dev, os.O_RDWR | os.O_NONBLOCK)
+            try:
+                for key, cmd in (("status", b"\x1b!?"), ("model", b"~!T\r\n")):
+                    try:
+                        os.write(fd, cmd)
+                    except BlockingIOError:
+                        pass
+                    buf, end = b"", time.monotonic() + 1.2
+                    while time.monotonic() < end:
+                        try:
+                            got = os.read(fd, 256)
+                            if got:
+                                buf += got
+                                if key == "status" or buf.endswith((b"\r", b"\n", b"\x00")):
+                                    break
+                        except (BlockingIOError, InterruptedError):
+                            pass
+                        except OSError as e:
+                            out[key + "_error"] = str(e)
+                            break
+                        time.sleep(0.05)
+                    if key == "status" and buf:
+                        b = buf[0]
+                        out["status_byte"] = b
+                        out["status"] = [v for k, v in _LP_STATUS.items() if b & k] or ["ready"]
+                    elif buf:
+                        out[key] = buf.decode("ascii", "replace").strip("\x00\r\n ")
+                    else:
+                        out.setdefault(key, None)
+            finally:
+                os.close(fd)
+        return out
 
     def status(self) -> dict:
         st = {"adapter": "tspl", "target": self.target}
@@ -261,11 +481,46 @@ class Tspl:
             return st
         try:
             dev = self.resolve_device()
-            st.update(device=dev, exists=os.path.exists(dev), writable=os.access(dev, os.W_OK))
-            st["ok"] = st["exists"] and st["writable"]
+            exists = os.path.exists(dev)
+            st.update(device=dev, exists=exists, writable=os.access(dev, os.W_OK),
+                      char_device=exists and stat.S_ISCHR(os.stat(dev).st_mode))
+            st["ok"] = bool(exists and st["writable"] and (st["char_device"] or not self.is_node))
+            st.update(usb_info(dev))
         except FileNotFoundError as e:
             st.update(ok=False, error=str(e))
+        st["job"] = {k: self.job_opts.get(k, v) for k, v in
+                     (("density", 8), ("speed", 3), ("band_rows", 200), ("thin", 0.5), ("invert", False))}
         return st
+
+
+class PrinterReset(OSError):
+    pass
+
+
+def usb_info(dev: str) -> dict:
+    """USB identity of a usblp node from sysfs (read-only; prints nothing)."""
+    name = os.path.basename(dev)
+    base = Path("/sys/class/usbmisc") / name / "device"
+    info = {}
+    try:
+        ieee = (base / "ieee1284_id").read_text().strip()
+        if ieee:
+            info["ieee1284_id"] = ieee
+    except OSError:
+        pass
+    try:
+        d = base.resolve()
+        for _ in range(4):
+            if (d / "idVendor").exists():
+                info["usb_id"] = f"{(d / 'idVendor').read_text().strip()}:{(d / 'idProduct').read_text().strip()}"
+                for k in ("manufacturer", "product"):
+                    if (d / k).exists():
+                        info["usb_" + k] = (d / k).read_text().strip()
+                break
+            d = d.parent
+    except OSError:
+        pass
+    return info
 
 
 # ------------------------------------------------------------ CUPS fallback
@@ -300,8 +555,8 @@ class Cups:
 
 # ------------------------------------------------------------ factory
 _INT = {"port", "width", "feed", "band", "threshold", "retries", "density", "speed",
-        "direction", "dpmm", "copies"}
-_FLOAT = {"timeout", "width_mm", "height_mm", "gap_mm"}
+        "direction", "dpmm", "copies", "band_rows", "margin_rows"}
+_FLOAT = {"timeout", "width_mm", "height_mm", "gap_mm", "thin", "watch"}
 _BOOL = {"invert", "tear"}
 
 
@@ -332,7 +587,7 @@ def make_adapter(uri: str):
         allowed = {"width", "cut", "feed", "band", "threshold", "retries", "timeout"}
         return EscPosNetwork(u.hostname, u.port or 9100, **{k: v for k, v in opts.items() if k in allowed})
     if u.scheme == "tspl":
-        conn = {k: opts.pop(k) for k in ("retries", "timeout") if k in opts}
+        conn = {k: opts.pop(k) for k in ("retries", "timeout", "watch") if k in opts}
         if u.hostname:
             return Tspl(host=u.hostname, port=u.port or 9100, **conn, **opts)
         return Tspl(device=u.path or "auto", **conn, **opts)

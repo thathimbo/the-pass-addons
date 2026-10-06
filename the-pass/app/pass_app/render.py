@@ -322,9 +322,11 @@ def card_label(*, code: str, title: str, notes: str = "", steps: int = 0, at=Non
     img = Image.new("L", (CARD_W, CARD_H), 255)
     d = ImageDraw.Draw(img)
     d.rounded_rectangle([14, 14, CARD_W - 15, CARD_H - 15], radius=36, outline=0, width=8)
-    d.rectangle([14, 14, CARD_W - 15, 110], fill=0)
-    d.rounded_rectangle([14, 14, CARD_W - 15, 110], radius=36, fill=0)
-    d.text((56, 38), "THE PASS  ·  CARD", font=font(40, True), fill=255)
+    # Header: black text over a thick rule. NOT a solid black bar. A full-width solid block
+    # fires every heater dot at once, and that peak current is enough to brown out / reset
+    # cheap label printers (the PL80E rebooted mid-card on v0.2.0).
+    d.text((56, 40), "THE PASS  ·  CARD", font=font(40, True), fill=0)
+    d.rectangle([14, 104, CARD_W - 15, 111], fill=0)
     # title, auto-shrink to fit 4 lines
     width = CARD_W - 112
     for size in (92, 84, 76, 68, 60, 54, 48, 42):
