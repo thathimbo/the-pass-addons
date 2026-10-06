@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scanner · The Pass</title>
+<style>
+  body{margin:0;background:#0b0b0c;color:#f4f1ea;font:22px/1.4 Inter,"DejaVu Sans",system-ui,sans-serif;padding:5vh 6vw}
+  input{width:100%;font:700 40px/1 "DejaVu Sans Mono",monospace;padding:18px 20px;border-radius:14px;border:3px solid #ffc53d;background:#141416;color:#f4f1ea;outline:none;box-sizing:border-box}
+  #msg{font-size:34px;font-weight:700;margin-top:4vh;min-height:2.6em}
+  #msg.err{color:#ff8a80}
+  #log{color:#9a968e;font-size:18px;margin-top:3vh;padding-left:20px}
+  a{color:#ffc53d}
+  .k{letter-spacing:.14em;text-transform:uppercase;color:#9a968e;font-size:16px;font-weight:700}
+</style></head><body>
+<p class="k">The Pass · scanner input</p>
+<form id="f" autocomplete="off"><input id="code" autofocus autocomplete="off" spellcheck="false" placeholder="scan a card or slip"></form>
+<div id="msg"></div>
+<ol id="log" reversed></ol>
+<p class="k" style="margin-top:6vh"><a href="./">projector view</a></p>
+<script>
+const input = document.getElementById("code"), msg = document.getElementById("msg"), log = document.getElementById("log");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const keep = () => setTimeout(() => input.focus(), 0);
+input.addEventListener("blur", keep); window.addEventListener("focus", keep); document.addEventListener("click", keep);
+document.getElementById("f").addEventListener("submit", async e => {
+  e.preventDefault(); const code = input.value.trim(); input.value = ""; if(!code) return;
+  try{
+    const r = await fetch("scan", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})});
+    const j = await r.json();
+    msg.className = j.ok === false ? "err" : ""; msg.innerHTML = esc(j.message || j.error) +
+      (j.open_url ? ` <a href="${esc(j.open_url)}" target="_blank">open retro form</a>` : "");
+    const li = document.createElement("li"); li.textContent = `${new Date().toLocaleTimeString()}  ${j.code || code}  ${j.action || ""}`;
+    log.prepend(li); while(log.children.length > 12) log.lastChild.remove();
+  }catch(err){ msg.className = "err"; msg.textContent = "Scan didn't reach the server."; }
+  keep();
+});
+</script></body></html>

@@ -1,0 +1,48 @@
+configuration:
+  receipt_printer:
+    name: Receipt printer
+    description: "escpos = network ESC/POS printer (slips print for real). png = previews only."
+  receipt_host:
+    name: Receipt printer host
+    description: IP of the ESC/POS receipt printer (yours is 192.168.1.87).
+  receipt_port:
+    name: Receipt printer port
+    description: Raw TCP port, almost always 9100.
+  receipt_cut:
+    name: Cut after each slip
+  label_printer:
+    name: Label printer
+    description: "tspl_usb = Polono PL80E over USB (direct TSPL). cups = through the CUPS add-on. png = previews only."
+  label_device:
+    name: Label printer device
+    description: "USB printer node, normally /dev/usb/lp0. Use 'auto' to take the first /dev/usb/lp*."
+  label_density:
+    name: Label darkness (0-15)
+  label_speed:
+    name: Label speed
+  label_gap_mm:
+    name: Gap between labels (mm)
+  label_invert:
+    name: Invert label bitmap
+    description: Turn on only if cards come out as a negative (black background).
+  cups_queue:
+    name: CUPS queue name (cups mode only)
+  cups_server:
+    name: CUPS server (cups mode only)
+    description: The CUPS add-on listens on the host network, usually 172.30.32.1:631.
+  base_url:
+    name: Base URL for phones
+    description: Address phones use to open the retro form from the retro slip QR (LAN IP + :8787).
+  token:
+    name: API token (optional)
+    description: If set, /api/* writes from outside HA need it. Scans and HA ingress don't.
+  webhooks:
+    name: Outbound webhook URLs
+    description: Every state change is POSTed here as JSON (Zapier, n8n, IFTTT...).
+  mid_task:
+    name: Scanning another card while a slip is out
+    description: "note = print a gentle heads-up, change nothing (default). allow = start a second slip."
+  out_keep:
+    name: PNG previews to keep
+network:
+  8787/tcp: Projector page, scanner, retro form, and API

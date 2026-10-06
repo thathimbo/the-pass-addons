@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desk · The Pass</title>
+<style>
+  body{margin:0 auto;max-width:900px;background:#121212;color:#eee;font:18px/1.45 Inter,"DejaVu Sans",system-ui,sans-serif;padding:24px}
+  h1{font-size:26px} h2{font-size:18px;color:#aaa;text-transform:uppercase;letter-spacing:.1em;margin-top:30px}
+  input,textarea{width:100%;box-sizing:border-box;font:inherit;background:#1e1e1e;color:#eee;border:1px solid #444;border-radius:8px;padding:10px;margin:6px 0}
+  button{font:inherit;font-weight:700;padding:8px 14px;border-radius:8px;border:0;background:#ffc53d;color:#111;cursor:pointer}
+  table{width:100%;border-collapse:collapse} td{padding:8px 6px;border-bottom:1px solid #2a2a2a;vertical-align:top}
+  .s{color:#aaa;font-size:14px} a{color:#ffc53d} code{color:#ffc53d}
+</style></head><body>
+<h1>The Pass · desk</h1>
+<p class="s">Setup page (not part of the kitchen loop). Capture a project, print its card. Everything here is also in the <a href="docs">API</a>.</p>
+<h2>Capture</h2>
+<form id="cap"><input name="title" placeholder="Project / task title (title alone is fine)" required>
+<textarea name="tasks" rows="3" placeholder="Steps, one per line (optional; leave empty for a one-step project)"></textarea>
+<label class="s"><input type="checkbox" name="print" style="width:auto"> print the card now</label><br>
+<button>Add to backlog</button></form>
+<h2>Projects</h2><table id="list"></table>
+<script>
+// Optional token: open /desk?token=XYZ once; it's remembered in this browser.
+const qs = new URLSearchParams(location.search); if(qs.get("token")) localStorage.setItem("passToken", qs.get("token"));
+const H = (extra={}) => ({...extra, ...(localStorage.getItem("passToken") ? {"X-Pass-Token": localStorage.getItem("passToken")} : {})});
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function load(){
+  const ps = await (await fetch("api/projects")).json();
+  document.getElementById("list").innerHTML = ps.reverse().map(p => `<tr><td><b>${esc(p.title)}</b> <code>${p.code}</code><div class="s">${p.tasks.map(t => (t.status==="done"?"✓ ":"· ")+esc(t.title)).join("<br>")}</div></td>
+   <td class="s">${p.status.replace(/_/g," ")}</td>
+   <td>${p.status!=="closed" ? `<button onclick="card(${p.id})">${p.card_printed_at?"reprint":"print"} card</button>` : ""}
+   ${p.status==="ready_to_close" ? `<a href="retro/${p.id}">retro</a>` : ""}</td></tr>`).join("");
+}
+async function card(id){ const r = await (await fetch(`api/projects/${id}/print-card`, {method:"POST", headers:H()})).json(); load(); if(r.png) window.open("out/" + r.png.split("/").pop()); }
+document.getElementById("cap").addEventListener("submit", async e => {
+  e.preventDefault(); const f = new FormData(e.target);
+  const tasks = f.get("tasks").split("\n").map(s => s.trim()).filter(Boolean);
+  const body = {title: f.get("title"), tasks: tasks.length ? tasks : [f.get("title")], print_card: !!f.get("print"), source: "desk"};
+  await fetch("api/projects", {method:"POST", headers:H({"Content-Type":"application/json"}), body: JSON.stringify(body)});
+  e.target.reset(); load();
+});
+load();
+</script></body></html>

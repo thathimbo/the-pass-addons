@@ -1,0 +1,7 @@
+# Pinned for the add-on image; every one has a prebuilt wheel for
+# musllinux aarch64 + x86_64 / CPython 3.13 (checked 2026-10-05).
+fastapi==0.142.2
+pydantic==2.13.5
+uvicorn==0.54.0
+qrcode==8.2
+pillow==12.3.0

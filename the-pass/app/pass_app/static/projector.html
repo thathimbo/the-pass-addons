@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Pass</title>
+<style>
+  :root{--bg:#0b0b0c;--panel:#141416;--ink:#f4f1ea;--dim:#9a968e;--faint:#5d5a55;--hot:#ffc53d;--ok:#7ee0a1;--line:#26262a}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:Inter,"Atkinson Hyperlegible","DejaVu Sans",system-ui,sans-serif;overflow:hidden;cursor:none}
+  .grid{display:grid;grid-template-columns:62fr 38fr;gap:2vw;height:100vh;padding:3vh 2.4vw}
+  .left{display:grid;grid-template-rows:auto 1.15fr 1fr;gap:2.4vh;min-height:0}
+  .right{display:grid;grid-template-rows:1.25fr 1fr;gap:2.4vh;min-height:0}
+  .panel{background:var(--panel);border-radius:1.6vw;padding:2.6vh 2vw;min-height:0;overflow:hidden;border:1px solid var(--line)}
+  .k{font-size:1.5vw;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;margin:0 0 1.4vh}
+  .now{border:3px solid var(--hot)}
+  .now.idle{border-color:var(--line)}
+  #nowTitle{font-size:5.6vw;line-height:1.05;font-weight:800;margin:0;letter-spacing:-.01em}
+  .idle #nowTitle{color:var(--dim);font-weight:600;font-size:4.4vw}
+  #nowMeta{font-size:2vw;color:var(--hot);margin-top:1.6vh;font-weight:600}
+  .idle #nowMeta{color:var(--faint)}
+  #nextTitle{font-size:4.2vw;line-height:1.15;font-weight:700;margin:0}
+  #nextSub{font-size:1.6vw;color:var(--dim);margin-top:1vh}
+  .top{display:flex;justify-content:space-between;align-items:baseline}
+  .brand{font-size:1.4vw;color:var(--faint);letter-spacing:.2em;text-transform:uppercase;font-weight:700}
+  #clock{font-size:2.2vw;color:var(--dim);font-variant-numeric:tabular-nums}
+  ul{list-style:none;margin:0;padding:0}
+  .todo li{display:flex;justify-content:space-between;gap:1vw;align-items:baseline;padding:.9vh 0;border-bottom:1px solid var(--line)}
+  .todo .t{display:block;font-size:1.9vw;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .todo .w{flex:1;min-width:0}
+  .todo .n{font-size:1.2vw;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-weight:400}
+  .tag{font-size:1.05vw;padding:.3vh .7vw;border-radius:99px;border:1px solid var(--faint);color:var(--dim);white-space:nowrap;flex:none}
+  .tag.ip{border-color:var(--hot);color:var(--hot)} .tag.rc{border-color:var(--ok);color:var(--ok)}
+  .tag.bl{border-style:dashed;color:var(--faint)}
+  .backlog .t{color:var(--dim)}
+  .done li{font-size:1.6vw;padding:.6vh 0;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .done li b{color:var(--ok);font-weight:700;margin-right:.6vw}
+  .done li.closed{color:var(--ink)}
+  .more{font-size:1.2vw;color:var(--faint);margin-top:.8vh}
+  #toast{position:fixed;left:2.4vw;top:2vh;width:57vw;box-sizing:border-box;background:#f4f1ea;color:#111;
+    font-size:2.1vw;font-weight:700;padding:1.6vh 2.4vw;border-radius:1vw;opacity:0;transition:opacity .4s}
+  #toast.on{opacity:1}
+</style></head>
+<body>
+<div class="grid">
+  <div class="left">
+    <div class="top"><span class="brand">The Pass</span><span id="clock"></span></div>
+    <section class="panel now idle" id="now">
+      <p class="k">Right now</p>
+      <h1 id="nowTitle">Nothing on the go.</h1>
+      <div id="nowMeta">Any card picks up where it left off.</div>
+    </section>
+    <section class="panel" id="next">
+      <p class="k">Smallest next thing</p>
+      <p id="nextTitle">—</p>
+      <div id="nextSub"></div>
+    </section>
+  </div>
+  <div class="right">
+    <section class="panel todo"><p class="k">Still to do</p><ul id="todo"></ul><div class="more" id="todoMore"></div></section>
+    <section class="panel done"><p class="k">Done</p><ul id="done"></ul></section>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function ago(iso){ if(!iso) return ""; const m=Math.round((Date.now()-new Date(iso))/60000);
+  if(m<1) return "just now"; if(m<60) return m+" min ago"; const h=Math.round(m/60); if(h<24) return h+" h ago";
+  return new Date(iso).toLocaleDateString([], {weekday:"short"}); }
+function clock(){ $("clock").textContent = new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}); }
+let lastToast = 0;
+function render(s){
+  const now = s.now, box = $("now");
+  if(now){
+    box.classList.remove("idle");
+    $("nowTitle").textContent = now.task_title;
+    $("nowMeta").textContent = now.project_title + (now.steps>1 ? `  ·  step ${now.step} of ${now.steps}` : "") + (now.started_at ? `  ·  since ${new Date(now.started_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}` : "");
+    if(now.first_step){ $("nextTitle").textContent = now.first_step; $("nextSub").textContent = "the first small bit of the slip that's out"; }
+    else if(now.after){ $("nextTitle").textContent = now.after; $("nextSub").textContent = "after this slip, on the same card"; }
+    else { $("nextTitle").textContent = "This slip is the last one on the card."; $("nextSub").textContent = "then a retro slip prints"; }
+  } else {
+    box.classList.add("idle");
+    $("nowTitle").textContent = "Nothing on the go.";
+    $("nowMeta").textContent = "Any card picks up where it left off.";
+    $("nextTitle").textContent = "—";
+    $("nextSub").textContent = "comes from whichever card gets scanned";
+  }
+  const rows = [
+    ...s.in_progress.map(p => [p, "ip", "in progress"]),
+    ...s.ready_to_close.map(p => [p, "rc", "retro"]),
+    ...s.todo.map(p => [p, "", "card out"]),
+    ...s.backlog.map(p => [p, "bl", "no card yet"]),
+  ];
+  const MAX = 9;
+  $("todo").innerHTML = rows.slice(0, MAX).map(([p, c, label]) => {
+    const sub = p.status === "ready_to_close" ? "all slips done · retro form waiting" :
+      (p.next_open ? (p.task_count > 1 ? `next on card: ${p.next_open} · ${p.open_count} open` : p.next_open === p.title ? "one step" : p.next_open) : "");
+    return `<li class="${c==='bl'?'backlog':''}"><span class="w"><span class="t">${esc(p.title)}</span><span class="n">${esc(sub)}</span></span><span class="tag ${c}">${label}</span></li>`;
+  }).join("") || `<li><span class="t" style="color:var(--dim)">Nothing waiting.</span></li>`;
+  $("todoMore").textContent = rows.length > MAX ? `+${rows.length - MAX} more` : "";
+  const done = [
+    ...s.closed.slice(0, 2).map(p => `<li class="closed"><b>✓✓</b>${esc(p.title)} · closed ${ago(p.closed_at)}</li>`),
+    ...s.done.slice(0, 7).map(t => `<li><b>✓</b>${esc(t.title)} <span style="color:var(--faint)">· ${esc(t.project_title)} · ${ago(t.done_at)}</span></li>`),
+  ];
+  $("done").innerHTML = done.join("") || `<li>Nothing yet today.</li>`;
+  const ls = s.last_scan;
+  if(ls && ls.id !== lastToast && (Date.now() - new Date(ls.created_at)) < 15000){ toast(ls.message); }
+  if(ls) lastToast = ls.id;
+}
+let toastTimer;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("on"), 7000); }
+async function poll(){ try{ const r = await fetch("api/state"); render(await r.json()); }catch(e){} }
+// Keyboard-wedge scanner support: the projector page can host the scanner directly.
+let buf = "", lastKey = 0;
+document.addEventListener("keydown", async e => {
+  const t = Date.now(); if(t - lastKey > 1500) buf = ""; lastKey = t;
+  if(e.key === "Enter"){ const code = buf.trim(); buf = ""; if(!code) return;
+    try{ const r = await fetch("scan", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({code})});
+      const j = await r.json(); toast(j.message || j.error); poll(); }catch(err){ toast("Scan didn't reach the server."); }
+  } else if(e.key.length === 1){ buf += e.key; }
+});
+clock(); setInterval(clock, 10000); poll(); setInterval(poll, 2000);
+</script>
+</body></html>
