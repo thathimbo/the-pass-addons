@@ -82,3 +82,17 @@ If you set a `token`, add `headers: {X-Pass-Token: "..."}`.
 
 The database is `/data/pass.db` and is included in add-on backups. PNG previews are in `/share/the-pass/out`
 and are excluded from backups.
+
+
+## Print from a Mac (CUPS queue -> The Pass)
+
+The Pass listens on port 9101 for raw label jobs (`label_raw_port`). A CUPS queue can send
+4x6 pages there as CUPS raster, so macOS print dialogs can use the label printer while
+The Pass stays the only program writing to `/dev/usb/lp0`:
+
+1. In the CUPS add-on, add a queue with device URI `socket://127.0.0.1:9101` and the
+   pass-through PPD (203 dpi, 8-bit gray, sizes 4x6 in and 100x150 mm,
+   `*cupsFilter: "application/vnd.cups-raster 0 -"`). Mark it shared.
+2. The CUPS add-on advertises shared queues over Bonjour, so the queue appears in the Mac's
+   Add Printer list and print dialogs. Pick paper size "4 x 6 in".
+3. You can also send a PNG straight to the port: `nc HOST 9101 < label.png`.

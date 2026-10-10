@@ -52,3 +52,6 @@ configuration:
     name: PNG previews to keep
 network:
   8787/tcp: Projector page, scanner, retro form, and API
+  label_raw_port:
+    name: Raw label port
+    description: TCP port for raw label jobs (CUPS raster or PNG/JPEG) printed through The Pass. 0 turns it off.

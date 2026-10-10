@@ -106,6 +106,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                   description="Scan-only kitchen-island task loop. Cards = projects, slips = tasks.")
     app.state.core = core
     app.state.settings = settings
+    app.state.rawprint = None
+    if settings.label_raw_port and settings.start_workers:
+        from .rawprint import RawLabelServer
+        app.state.rawprint = RawLabelServer(core.printers, settings.label_raw_port)
+        app.state.rawprint.start()
     settings.out_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/out", StaticFiles(directory=str(settings.out_dir)), name="out")
 
@@ -267,7 +272,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/printers", tags=["printing"])
     def printers_status():
         """Adapter + reachability per device, and the last send results."""
-        return {"devices": core.printers.status(), "recent": core.printers.history[-15:][::-1]}
+        rp = app.state.rawprint
+        raw = ({"port": rp.port, "jobs": rp.jobs, "last": rp.last} if rp else None)
+        return {"devices": core.printers.status(), "recent": core.printers.history[-15:][::-1],
+                "label_raw_listener": raw}
 
     @app.post("/api/printers/test", tags=["printing"], dependencies=[Depends(auth)])
     def printer_test(body: PrinterTestIn):

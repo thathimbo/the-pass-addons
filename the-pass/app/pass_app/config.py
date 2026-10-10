@@ -34,6 +34,7 @@ class Settings:
     webhooks: list[str] = field(default_factory=list)  # seeded at startup
     out_keep: int = 0              # keep only the newest N PNGs in out/ (0 = keep all)
     start_workers: bool = True
+    label_raw_port: int = 0        # raw TCP label listener (CUPS raster / PNG); 0 = off
 
     def __post_init__(self):
         self.db_path = Path(self.db_path)
@@ -58,6 +59,7 @@ class Settings:
             mid_task=e("PASS_MID_TASK", "note"),
             base_url=e("PASS_BASE_URL", ""),
             token=e("PASS_TOKEN", ""),
+            label_raw_port=int(e("PASS_LABEL_RAW_PORT", "0") or 0),
             webhooks=[u.strip() for u in e("PASS_WEBHOOKS", "").split(",") if u.strip()],
             out_keep=int(e("PASS_OUT_KEEP", "0") or 0),
         )

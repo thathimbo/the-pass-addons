@@ -1,5 +1,5 @@
 name: The Pass
-version: "0.2.1"
+version: "0.2.2"
 slug: the_pass
 description: Scan-only kitchen-island task loop. Cards (4x6 labels) are projects, receipt slips are tasks.
 url: https://github.com/thathimbo/the-pass-addons
@@ -16,8 +16,10 @@ panel_title: The Pass
 panel_admin: false
 ports:
   8787/tcp: 8787
+  9101/tcp: 9101
 ports_description:
   8787/tcp: Projector page, scanner page, retro form (phones), and the HTTP API
+  9101/tcp: Raw label jobs (CUPS raster / PNG) printed through The Pass's label path
 webui: http://[HOST]:[PORT:8787]/
 watchdog: http://[HOST]:[PORT:8787]/api/health
 # Label printer (Polono PL80E, USB). usblp exposes it as /dev/usb/lp0 on HA OS.
@@ -44,6 +46,7 @@ options:
   label_invert: false
   label_band_rows: 200
   label_thin: 0.5
+  label_raw_port: 9101
   cups_server: 172.30.32.1:631
   base_url: http://192.168.1.92:8787
   webhooks: []
@@ -62,6 +65,7 @@ schema:
   label_invert: bool
   label_band_rows: int(0,1200)
   label_thin: float(0,1)
+  label_raw_port: int(0,65535)?
   cups_queue: str?
   cups_server: str?
   base_url: str?

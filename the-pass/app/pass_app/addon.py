@@ -23,6 +23,7 @@ def options_to_env(o: dict) -> dict[str, str]:
         "PASS_MID_TASK": o.get("mid_task", "note"),
         "PASS_BASE_URL": (o.get("base_url") or "").strip(),
         "PASS_TOKEN": (o.get("token") or "").strip(),
+        "PASS_LABEL_RAW_PORT": str(o.get("label_raw_port", 9101) or 0),
         "PASS_WEBHOOKS": ",".join(u.strip() for u in (o.get("webhooks") or []) if u and u.strip()),
     }
 

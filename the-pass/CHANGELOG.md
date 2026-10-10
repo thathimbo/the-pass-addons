@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+- New: raw label listener on port 9101 (`label_raw_port`, 0 = off). Each TCP connection is one
+  job: CUPS raster (RaS2/RaS3) or a PNG/JPEG image. Every page prints through the normal label
+  path (same fit, threshold, heater guard and banding as cards), so The Pass stays the only
+  writer to /dev/usb/lp0. Only private/loopback clients are accepted.
+- This lets a CUPS queue (e.g. the CUPS add-on, shared over Bonjour/AirPrint) print 4x6 labels
+  from a Mac: the queue uses a pass-through PPD and `socket://127.0.0.1:9101`.
+- GET /api/printers shows the listener (port, job count, last job).
+
 ## 0.2.1
 - Fix: the PL80E reset mid-card (judder + beep; USB dropped 1-2 s after each job). The card
   began with a full-width solid black header (83 rows at 96% black) printed at density 10 /
