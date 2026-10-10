@@ -28,6 +28,9 @@ configuration:
   label_band_rows:
     name: Bitmap band height (rows)
     description: The card is sent as several TSPL BITMAP commands this many dot-rows tall (0 = one big command). 200 suits small printer buffers.
+  label_raw_port:
+    name: Raw label port
+    description: TCP port for raw label jobs (CUPS raster or PNG/JPEG) printed through The Pass. 0 turns it off.
   label_thin:
     name: Solid-area limit
     description: Rows burning more than this fraction of dots get their solid areas hatched 50%, so the printer is not overloaded (0 = off). 0.5 is safe.
@@ -52,6 +55,4 @@ configuration:
     name: PNG previews to keep
 network:
   8787/tcp: Projector page, scanner, retro form, and API
-  label_raw_port:
-    name: Raw label port
-    description: TCP port for raw label jobs (CUPS raster or PNG/JPEG) printed through The Pass. 0 turns it off.
+  9101/tcp: Raw label jobs (CUPS raster / PNG) printed through The Pass
