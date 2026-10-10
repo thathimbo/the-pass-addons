@@ -1,0 +1,55 @@
+*PPD-Adobe: "4.3"
+*FormatVersion: "4.3"
+*FileVersion: "1.0"
+*LanguageVersion: English
+*LanguageEncoding: ISOLatin1
+*PCFileName: "D450PASS.PPD"
+*Manufacturer: "QIN"
+*Product: "(D450)"
+*ModelName: "QIN D450 Label (via The Pass)"
+*ShortNickName: "QIN D450 via The Pass"
+*NickName: "QIN D450 4x6 Label via The Pass, 203 dpi"
+*PSVersion: "(3010.000) 0"
+*LanguageLevel: "3"
+*ColorDevice: False
+*DefaultColorSpace: Gray
+*FileSystem: False
+*Throughput: "1"
+*LandscapeOrientation: Plus90
+*TTRasterizer: Type42
+*cupsVersion: 2.4
+*cupsModelNumber: 0
+*cupsManualCopies: True
+*cupsFilter2: "application/vnd.cups-raster application/vnd.cups-raster 0 gziptoany"
+*cupsLanguages: "en"
+*% 8-bit grayscale raster; The Pass thresholds it and adds its heater guard.
+*OpenUI *ColorModel/Color Mode: PickOne
+*OrderDependency: 10 AnySetup *ColorModel
+*DefaultColorModel: Gray
+*ColorModel Gray/Grayscale: "<</cupsColorOrder 0/cupsColorSpace 18/cupsBitsPerColor 8/cupsCompression 1>>setpagedevice"
+*CloseUI: *ColorModel
+*OpenUI *Resolution/Resolution: PickOne
+*OrderDependency: 10 AnySetup *Resolution
+*DefaultResolution: 203dpi
+*Resolution 203dpi/203 dpi: "<</HWResolution[203 203]>>setpagedevice"
+*CloseUI: *Resolution
+*OpenUI *PageSize/Label Size: PickOne
+*OrderDependency: 10 AnySetup *PageSize
+*DefaultPageSize: w288h432
+*PageSize w288h432/4 x 6 in: "<</PageSize[288 432]/ImagingBBox null>>setpagedevice"
+*PageSize w283h425/100 x 150 mm: "<</PageSize[283.46 425.2]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageSize
+*OpenUI *PageRegion/Label Size: PickOne
+*OrderDependency: 10 AnySetup *PageRegion
+*DefaultPageRegion: w288h432
+*PageRegion w288h432/4 x 6 in: "<</PageSize[288 432]/ImagingBBox null>>setpagedevice"
+*PageRegion w283h425/100 x 150 mm: "<</PageSize[283.46 425.2]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageRegion
+*DefaultImageableArea: w288h432
+*ImageableArea w288h432/4 x 6 in: "0 0 288 432"
+*ImageableArea w283h425/100 x 150 mm: "0 0 283.46 425.2"
+*DefaultPaperDimension: w288h432
+*PaperDimension w288h432/4 x 6 in: "288 432"
+*PaperDimension w283h425/100 x 150 mm: "283.46 425.2"
+*DefaultFont: Courier
+*Font Courier: Standard "(002.004S)" Standard ROM

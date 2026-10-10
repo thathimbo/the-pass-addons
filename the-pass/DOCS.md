@@ -90,9 +90,14 @@ The Pass listens on port 9101 for raw label jobs (`label_raw_port`). A CUPS queu
 4x6 pages there as CUPS raster, so macOS print dialogs can use the label printer while
 The Pass stays the only program writing to `/dev/usb/lp0`:
 
-1. In the CUPS add-on, add a queue with device URI `socket://127.0.0.1:9101` and the
-   pass-through PPD (203 dpi, 8-bit gray, sizes 4x6 in and 100x150 mm,
-   `*cupsFilter: "application/vnd.cups-raster 0 -"`). Mark it shared.
-2. The CUPS add-on advertises shared queues over Bonjour, so the queue appears in the Mac's
-   Add Printer list and print dialogs. Pick paper size "4 x 6 in".
+1. In the CUPS add-on, add a queue with device URI `socket://127.0.0.1:9101` and
+   `cups/D450_Label.ppd` from this repo (203 dpi, 8-bit gray, 4x6 in and 100x150 mm; its last
+   filter is `gziptoany`, a pass-through, so CUPS raster reaches The Pass unchanged), then
+   `lpadmin -p D450_Label -o printer-is-shared=true -o printer-error-policy=abort-job`.
+   (A `-` filter makes CUPS treat the queue as raw/remote and refuse to share it;
+   `rastertopwg` rejects the Mac's borderless 4x6 pages.)
+2. The CUPS add-on advertises shared queues over Bonjour ("QIN D450 Label 4x6 @ da0dade1-cups"),
+   so it appears in the Mac's Add Printer list. Add it (AirPrint / IPP Everywhere) or run
+   `lpadmin -p QIN_D450_Label -E -v ipp://HA_HOST:631/printers/D450_Label -m everywhere`.
+   Paper size: "4 x 6" (shown as 4x6.Borderless). 100x150 mm also works.
 3. You can also send a PNG straight to the port: `nc HOST 9101 < label.png`.
