@@ -117,7 +117,7 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     while x < W:
         d.line([x, FOLD, x + 18, FOLD], fill=0, width=3)
         x += 30
-    d.text((W - 300, FOLD + 6), "FOLD HERE  ✂  STRIP ABOVE", font=font(16, True), fill=0)
+    d.text((W - 300, FOLD - 26), "FOLD HERE  ✂  STRIP ABOVE", font=font(16, True), fill=0)
     # --- tab / back: steps + notes
     ty = FOLD + 40
     for i, (name, est, actual) in enumerate(steps[:8]):
