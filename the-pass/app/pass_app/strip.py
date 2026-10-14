@@ -38,13 +38,10 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     d.line([200, y0, 200, r1], fill=0, width=3)
     d.line([370, y0, 370, r1], fill=0, width=3)
     small, tiny = font(30, True), font(16, False)
-    d.text((M + 8, y0 + 4), "TYPE/STACK", font=tiny, fill=0)
-    ctext(d, 125, (y0 + r1) / 2 + 8, f"{kind}/{stack[0]}", small)
-    d.text((208, y0 + 4), "TASKS", font=tiny, fill=0)
+    ctext(d, 125, (y0 + r1) / 2, f"{kind}/{stack[0]}", small)
     done = sum(1 for s in steps if s[2])
-    ctext(d, 285, (y0 + r1) / 2 + 8, f"{done}/{len(steps)}", small)
-    d.text((378, y0 + 4), "DUE", font=tiny, fill=0)
-    ctext(d, 455, (y0 + r1) / 2 + 8, due or "--", fit(d, due or "--", 150, [28, 24, 20]))
+    ctext(d, 285, (y0 + r1) / 2, f"{done}/{len(steps)}", small)
+    ctext(d, 455, (y0 + r1) / 2, due or "--", fit(d, due or "--", 150, [28, 24, 20]))
     # callsign (bold title, uppercase, shrink to fit one line)
     cs = title.upper()
     f = fit(d, cs, ax1 - M - 30, [64, 58, 52, 46, 40, 36, 32, 28])
@@ -55,12 +52,8 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     eq = [("STACK", stack), ("PRINTED", printed)]
     xs = [M, 230, 440, ax1]
     for i, (k, v) in enumerate(eq):
-        d.text((xs[i] + 8, r2 + 4), k, font=tiny, fill=0)
-        ctext(d, (xs[i] + xs[i + 1]) / 2, (r2 + y1) / 2 + 8, v, fit(d, v, xs[i + 1] - xs[i] - 16, [26, 22, 18], bold=False))
+        ctext(d, (xs[i] + xs[i + 1]) / 2, (r2 + y1) / 2 + 0, v, fit(d, v, xs[i + 1] - xs[i] - 16, [26, 22, 18], bold=False))
         d.line([xs[i + 1], r2, xs[i + 1], y1], fill=0, width=3)
-    # HTC mark: outlined, not solid (avoid big solid blocks on thermal)
-    d.rectangle([xs[2] + 8, r2 + 10, ax1 - 8, y1 - 10], outline=0, width=3)
-    ctext(d, (xs[2] + ax1) / 2, (r2 + y1) / 2, "HTC", font(30, True))
     # --- column B (ADEP-style): QR + code
     bx1 = ax1 + 220
     d.line([bx1, y0, bx1, y1], fill=0, width=4)
@@ -107,9 +100,8 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     if len(steps) > n:
         d.text((ox0 - 40, mid - 24), f"+{len(steps) - n}", font=font(18, True), fill=0)
     # --- column D: other info
-    d.text((ox0 + 8, y0 + 4), "OTHER", font=tiny, fill=0)
     for j, ln in enumerate(wrap(d, other, font(18), 124)[:8]):
-        d.text((ox0 + 8, y0 + 26 + j * 23), ln, font=font(18), fill=0)
+        d.text((ox0 + 8, y0 + 8 + j * 23), ln, font=font(18), fill=0)
     box(d, M, y0, W - M - 1, y1, 5)
     # --- fold line
     x = 0
@@ -117,9 +109,8 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
         d.line([x, FOLD, x + 18, FOLD], fill=0, width=3)
         x += 30
     # --- below the fold: notes only
-    d.text((40, FOLD + 16), "NOTES", font=font(20, True), fill=0)
     nf = font(26)
     for k, ln in enumerate(wrap(d, notes or "", nf, W - 80)[:11]):
-        d.text((40, FOLD + 48 + k * 32), ln, font=nf, fill=0)
+        d.text((40, FOLD + 20 + k * 32), ln, font=nf, fill=0)
     return img.point(lambda v: 0 if v < 128 else 255, "1")
 
