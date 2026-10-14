@@ -24,7 +24,23 @@ def fit(d, s, maxw, sizes, bold=True, mono=False):
             return f
     return font(sizes[-1], bold, mono)
 
-def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
+def short_title(d, title, maxw, short=""):
+    """Short strip descriptor: `short` if given, else the first 1-2 words. Never cut mid-glyph."""
+    sizes = [64, 58, 52, 46, 40, 36, 32, 28, 24, 20]
+    words = (short or title or "").upper().split() or ["--"]
+    cands = [" ".join(words)] if short else [" ".join(words[:2]), words[0]]
+    for c in cands:
+        for sz in sizes:
+            f = font(sz, True)
+            if d.textlength(c, font=f) <= maxw:
+                return c, f
+    c, f = cands[-1], font(sizes[-1], True)
+    while len(c) > 1 and d.textlength(c, font=f) > maxw:
+        c = c[:-1]
+    return c, f
+
+
+def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed, short=""):
     img = Image.new("L", (W, H), 255)
     d = ImageDraw.Draw(img)
     y0, y1 = M, TOP - 8
@@ -47,10 +63,7 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     d.text((378, y0 + 4), "DUE", font=tiny, fill=0)
     ctext(d, 455, (y0 + r1) / 2 + 8, due or "--", fit(d, due or "--", 150, [28, 24, 20]))
     # callsign (bold title, uppercase, shrink to fit one line)
-    cs = title.upper()
-    f = fit(d, cs, ax1 - M - 30, [64, 58, 52, 46, 40, 36, 32, 28])
-    while d.textlength(cs, font=f) > ax1 - M - 30:
-        cs = cs[:-2].rstrip() + "…"
+    cs, f = short_title(d, title, ax1 - M - 30, short)
     ctext(d, (M + ax1) / 2, (r1 + r2) / 2, cs, f)
     # equipment row: stack name, printed stamp, HTC mark
     eq = [("STACK", stack), ("PRINTED", printed)]
@@ -117,7 +130,12 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     while x < W:
         d.line([x, FOLD, x + 18, FOLD], fill=0, width=3)
         x += 30
-    d.text((W - 300, FOLD - 26), "FOLD HERE  ✂  STRIP ABOVE", font=font(16, True), fill=0)
+    # full title on the line(s) right above the fold
+    tf = fit(d, title, W - 80, [30, 28, 26, 24, 22], bold=True)
+    tl = wrap(d, title, tf, W - 80)[:3]
+    for k, ln in enumerate(reversed(tl)):
+        d.text((40, FOLD - 40 - k * 36), ln, font=tf, fill=0)
+    d.text((W - 300, FOLD + 6), "FOLD HERE  ✂  STRIP ABOVE", font=font(16, True), fill=0)
     # --- tab / back: steps + notes
     ty = FOLD + 40
     for i, (name, est, actual) in enumerate(steps[:8]):

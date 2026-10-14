@@ -262,7 +262,8 @@ class Pass:
                 raise PassError("that project is closed", 409)
             path = self._print("label", "card", render.card_label(
                 code=p["code"], title=p["title"], notes=p["notes"], steps=self.tasks_of(pid),
-                due=p.get("due") or "", stack=p["status"]), p["title"], p["code"])
+                due=p.get("due") or "", stack=p["status"],
+                short=p.get("short") or p.get("callsign") or ""), p["title"], p["code"])
             first = p["card_printed_at"] is None
             if p["status"] == "backlog":
                 self.db.run("UPDATE tasks SET status='todo', updated_at=? WHERE project_id=? "

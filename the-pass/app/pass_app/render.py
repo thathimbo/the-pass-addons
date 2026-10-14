@@ -323,7 +323,7 @@ STACK_NAMES = {"backlog": "Backlog", "todo": "To Do", "in_progress": "Doing",
 
 
 def card_label(*, code: str, title: str, notes: str = "", steps=0, at=None, due: str = "",
-               stack: str = "", kind: str = "CARD", other: str = "") -> Image.Image:
+               stack: str = "", kind: str = "CARD", other: str = "", short: str = "") -> Image.Image:
     """HTC flight-strip card. Drawn landscape (6x4), returned rotated to the label's
     portrait dot grid (CARD_W x CARD_H) so the TSPL path prints it unchanged.
     `steps` is a list of (name, est, actual) / task dicts, or a plain count."""
@@ -340,7 +340,7 @@ def card_label(*, code: str, title: str, notes: str = "", steps=0, at=None, due:
     stack = STACK_NAMES.get(stack, stack) or "Backlog"
     img = strip_card(code=code, title=title, kind=(kind or "CARD")[:5].upper(), stack=stack,
                      due=_due_text(due), steps=rows, notes=notes or "", other=other or "",
-                     printed=_stamp(at))
+                     printed=_stamp(at), short=short or "")
     img = img.convert("L").rotate(90, expand=True)
     img = img.resize((CARD_W, CARD_H), Image.LANCZOS)
     return img.point(lambda v: 0 if v < 128 else 255)
