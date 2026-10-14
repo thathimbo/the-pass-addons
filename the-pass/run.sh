@@ -1,6 +1,6 @@
 #!/usr/bin/with-contenv bashio
 # shellcheck shell=bash
-bashio::log.info "Starting The Pass on :8787 (ingress + host port)"
+bashio::log.info "Starting HTC (Himbo Task Control) on :8787 (ingress + host port)"
 if [ -e /dev/usb/lp0 ]; then
   bashio::log.info "Label printer device present: $(ls -l /dev/usb/lp0)"
 else

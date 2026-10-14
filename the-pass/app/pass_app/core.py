@@ -129,7 +129,8 @@ class Pass:
 
     # ------------------------------------------------------------ capture
     def create_project(self, title: str, tasks: list | None = None, notes: str = "",
-                       source: str = "", external_id: str = "", print_card: bool = False) -> dict:
+                       source: str = "", external_id: str = "", print_card: bool = False,
+                       due: str = "") -> dict:
         title = (title or "").strip()
         if not title:
             raise PassError("title is required")
@@ -141,9 +142,9 @@ class Pass:
                     return {**self.project_view(ex["id"]), "duplicate": True}
             ts = now()
             pid = self.db.run(
-                "INSERT INTO projects(code,title,notes,status,source,external_id,created_at,updated_at)"
-                " VALUES(?,?,?,?,?,?,?,?)", self._code("C"), title, notes or "", "backlog",
-                source or "", external_id or "", ts, ts)
+                "INSERT INTO projects(code,title,notes,status,source,external_id,created_at,updated_at,due)"
+                " VALUES(?,?,?,?,?,?,?,?,?)", self._code("C"), title, notes or "", "backlog",
+                source or "", external_id or "", ts, ts, due or "")
             self.events.emit("project.created", {"project": self.project(pid)})
             for t in tasks or []:
                 if isinstance(t, str):
@@ -198,7 +199,7 @@ class Pass:
         return {"project": p, "task": p["tasks"][0] if p["tasks"] else None}
 
     def update_project(self, pid: int, **fields) -> dict:
-        allowed = {k: v for k, v in fields.items() if k in ("title", "notes") and v is not None}
+        allowed = {k: v for k, v in fields.items() if k in ("title", "notes", "due") and v is not None}
         with self.lock, self.db.tx():
             self.project(pid)
             if allowed:
@@ -227,9 +228,9 @@ class Pass:
             p = self.project(pid)
             if p["status"] == "closed":
                 raise PassError("that project is closed", 409)
-            n = len(self.tasks_of(pid))
             path = self._print("label", "card", render.card_label(
-                code=p["code"], title=p["title"], notes=p["notes"], steps=n), p["title"], p["code"])
+                code=p["code"], title=p["title"], notes=p["notes"], steps=self.tasks_of(pid),
+                due=p.get("due") or "", stack=p["status"]), p["title"], p["code"])
             first = p["card_printed_at"] is None
             if p["status"] == "backlog":
                 self.db.run("UPDATE tasks SET status='todo', updated_at=? WHERE project_id=? "
@@ -272,7 +273,7 @@ class Pass:
         if device not in ("receipt", "label"):
             raise PassError("device must be receipt or label")
         if device == "label":
-            img = render.card_label(code="CTEST23", title="Label printer test", steps=0,
+            img = render.card_label(code="CTEST23", title="Label printer test", steps=0, stack="todo",
                                     notes="If this QR scans as CTEST23, cards are good.")
         else:
             img = render.notification_slip(
@@ -302,7 +303,7 @@ class Pass:
             for k, v in (("density", density), ("speed", speed), ("band_rows", band_rows), ("thin", thin)):
                 if v is not None:
                     jo[k] = v
-            img = render.card_label(code="CTEST23", title="Label printer test", steps=0,
+            img = render.card_label(code="CTEST23", title="Label printer test", steps=0, stack="todo",
                                     notes="If this QR scans as CTEST23, cards are good.")
             data = tspl_bitmap_job(img, **jo)
         elif variant in ("text", "bitmap", "solid"):

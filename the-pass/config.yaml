@@ -1,7 +1,7 @@
-name: The Pass
-version: "0.2.2"
+name: HTC (Himbo Task Control)
+version: "0.3.0"
 slug: the_pass
-description: Scan-only kitchen-island task loop. Cards (4x6 labels) are projects, receipt slips are tasks.
+description: HTC (formerly The Pass). Scan-only kitchen-island task loop. Cards (4x6 labels) are projects, receipt slips are tasks.
 url: https://github.com/thathimbo/the-pass-addons
 arch:
   - aarch64
@@ -11,15 +11,15 @@ boot: auto
 init: false
 ingress: true
 ingress_port: 8787
-panel_icon: mdi:silverware-fork-knife
-panel_title: The Pass
+panel_icon: mdi:airplane
+panel_title: HTC
 panel_admin: false
 ports:
   8787/tcp: 8787
   9101/tcp: 9101
 ports_description:
   8787/tcp: Projector page, scanner page, retro form (phones), and the HTTP API
-  9101/tcp: Raw label jobs (CUPS raster / PNG) printed through The Pass's label path
+  9101/tcp: Raw label jobs (CUPS raster / PNG) printed through HTC's label path
 webui: http://[HOST]:[PORT:8787]/
 watchdog: http://[HOST]:[PORT:8787]/api/health
 # Label printer (Polono PL80E, USB). usblp exposes it as /dev/usb/lp0 on HA OS.

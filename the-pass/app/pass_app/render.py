@@ -212,7 +212,7 @@ def task_slip(*, code: str, task: str, project: str, first_step: str = "",
     p.space(12)
     p.rule(2, dash=8)
     p.space(10)
-    p.text(f"The Pass  ·  {_stamp(at)}", 20, align="center")
+    p.text(f"HTC  ·  {_stamp(at)}", 20, align="center")
     return p.finish(24)
 
 
@@ -318,40 +318,39 @@ def void_notice(*, code: str, task: str, project: str, at=None) -> Image.Image:
 
 # ---------------------------------------------------------------- card label
 
-def card_label(*, code: str, title: str, notes: str = "", steps: int = 0, at=None) -> Image.Image:
-    img = Image.new("L", (CARD_W, CARD_H), 255)
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle([14, 14, CARD_W - 15, CARD_H - 15], radius=36, outline=0, width=8)
-    # Header: black text over a thick rule. NOT a solid black bar. A full-width solid block
-    # fires every heater dot at once, and that peak current is enough to brown out / reset
-    # cheap label printers (the PL80E rebooted mid-card on v0.2.0).
-    d.text((56, 40), "THE PASS  ·  CARD", font=font(40, True), fill=0)
-    d.rectangle([14, 104, CARD_W - 15, 111], fill=0)
-    # title, auto-shrink to fit 4 lines
-    width = CARD_W - 112
-    for size in (92, 84, 76, 68, 60, 54, 48, 42):
-        f = font(size, True)
-        lines = wrap(d, title, f, width)
-        if len(lines) <= 4:
-            break
-    lines = lines[:4]
-    asc, desc = f.getmetrics()
-    y = 150
-    for line in lines:
-        d.text((56, y), line, font=f, fill=0)
-        y += asc + desc + 6
-    if notes:
-        nf = font(28)
-        for line in wrap(d, notes, nf, width)[:2]:
-            d.text((56, y + 4), line, font=nf, fill=0)
-            y += 36
-    q = qr_image(code, max(240, min(520, CARD_H - 130 - (y + 24))))
-    qy = max(y + 24, CARD_H - 130 - q.height)
-    img.paste(q, ((CARD_W - q.width) // 2, qy))
-    cf = font(56, True, True)
-    tw = d.textlength(code, font=cf)
-    d.text(((CARD_W - tw) / 2, CARD_H - 120), code, font=cf, fill=0)
-    meta = f"{'one step' if steps == 1 else (str(steps) + ' steps' if steps else 'steps added later')}  ·  printed {_stamp(at)}"
-    mf = font(22)
-    d.text(((CARD_W - d.textlength(meta, font=mf)) / 2, CARD_H - 56), meta, font=mf, fill=0)
-    return img
+STACK_NAMES = {"backlog": "Backlog", "todo": "To Do", "in_progress": "Doing",
+               "ready_to_close": "Ready", "closed": "Closed"}
+
+
+def card_label(*, code: str, title: str, notes: str = "", steps=0, at=None, due: str = "",
+               stack: str = "", kind: str = "CARD", other: str = "") -> Image.Image:
+    """HTC flight-strip card. Drawn landscape (6x4), returned rotated to the label's
+    portrait dot grid (CARD_W x CARD_H) so the TSPL path prints it unchanged.
+    `steps` is a list of (name, est, actual) / task dicts, or a plain count."""
+    from .strip import strip_card
+    if isinstance(steps, int):
+        rows = [(f"Step {i + 1}", "", "") for i in range(steps)]
+    else:
+        rows = []
+        for s in steps:
+            if isinstance(s, dict):
+                rows.append((s.get("title", ""), "", "done" if s.get("status") == "done" else ""))
+            else:
+                rows.append(tuple(s) + ("",) * (3 - len(s)))
+    stack = STACK_NAMES.get(stack, stack) or "Backlog"
+    img = strip_card(code=code, title=title, kind=(kind or "CARD")[:5].upper(), stack=stack,
+                     due=_due_text(due), steps=rows, notes=notes or "", other=other or "",
+                     printed=_stamp(at))
+    img = img.convert("L").rotate(90, expand=True)
+    img = img.resize((CARD_W, CARD_H), Image.LANCZOS)
+    return img.point(lambda v: 0 if v < 128 else 255)
+
+
+def _due_text(due) -> str:
+    if not due:
+        return ""
+    try:
+        d = dt.date.fromisoformat(str(due)[:10])
+        return d.strftime("%b ") + str(d.day)
+    except ValueError:
+        return str(due)[:12]

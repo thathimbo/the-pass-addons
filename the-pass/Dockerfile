@@ -18,7 +18,7 @@ RUN chmod a+x /run.sh
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/opt/pass
 
 LABEL \
-  io.hass.name="The Pass" \
+  io.hass.name="HTC (Himbo Task Control)" \
   io.hass.description="Scan-only kitchen-island task loop" \
   io.hass.version="${BUILD_VERSION}" \
   io.hass.type="app" \

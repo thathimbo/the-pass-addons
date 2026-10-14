@@ -27,6 +27,7 @@ class TaskIn(BaseModel):
 class ProjectIn(BaseModel):
     title: str
     notes: str = ""
+    due: str = ""
     tasks: list[Union[str, TaskIn]] = []
     source: str = ""
     external_id: str = ""
@@ -45,6 +46,7 @@ class CaptureIn(BaseModel):
 class ProjectPatch(BaseModel):
     title: Optional[str] = None
     notes: Optional[str] = None
+    due: Optional[str] = None
 
 
 class TaskPatch(BaseModel):
@@ -102,7 +104,7 @@ class WebhookIn(BaseModel):
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     core = Pass(settings)
-    app = FastAPI(title="The Pass", version="0.1.0",
+    app = FastAPI(title="HTC (Himbo Task Control)", version="0.3.0",
                   description="Scan-only kitchen-island task loop. Cards = projects, slips = tasks.")
     app.state.core = core
     app.state.settings = settings
@@ -215,7 +217,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def create_project(body: ProjectIn):
         tasks = [t if isinstance(t, str) else t.model_dump() for t in body.tasks]
         return core.create_project(body.title, tasks, body.notes, body.source, body.external_id,
-                                   body.print_card)
+                                   body.print_card, body.due)
 
     @app.get("/api/projects/{pid}", tags=["projects"])
     def get_project(pid: int):
@@ -316,7 +318,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/webhooks/{wid}/test", tags=["webhooks"], dependencies=[Depends(auth)])
     def test_webhook(wid: int):
-        eid = core.events.emit("webhook.test", {"webhook_id": wid, "message": "hello from The Pass"})
+        eid = core.events.emit("webhook.test", {"webhook_id": wid, "message": "hello from HTC"})
         return {"ok": True, "event_id": eid}
 
     @app.get("/api/webhooks/deliveries", tags=["webhooks"], dependencies=[Depends(auth)])
@@ -340,7 +342,7 @@ _PROMPTS = [("went_well", "What went well?"), ("was_hard", "What was harder than
 
 def _page(title: str, body: str) -> str:
     return f"""<!doctype html><html><head><meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1"><title>{title} · The Pass</title>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>{title} · HTC</title>
 <style>
 body{{background:#121212;color:#eee;font:20px/1.45 Inter,"DejaVu Sans",system-ui,sans-serif;
 max-width:720px;margin:0 auto;padding:28px}}

@@ -94,6 +94,9 @@ class Database:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(projects)")}
+        if "due" not in cols:  # v0.3.0: optional due date shown on the HTC strip card
+            self.conn.execute("ALTER TABLE projects ADD COLUMN due TEXT NOT NULL DEFAULT ''")
         self.lock = threading.RLock()
         self._depth = 0
 

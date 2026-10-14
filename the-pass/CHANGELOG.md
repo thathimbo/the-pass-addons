@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+- Renamed to **HTC (Himbo Task Control)** in the add-on name, sidebar, page titles and printouts.
+  The slug (`the_pass`), entity ids, event names and API paths are unchanged.
+- Cards are now the HTC flight-progress strip: 6x4 landscape, strip on top (callsign, stack,
+  task count, due, QR, first four steps), fold line, full flight plan + notes on the tab.
+- Projects have an optional `due` (POST/PATCH /api/projects); print-card passes due, stack and steps.
+
 ## 0.2.2
 - New: raw label listener on port 9101 (`label_raw_port`, 0 = off). Each TCP connection is one
   job: CUPS raster (RaS2/RaS3) or a PNG/JPEG image. Every page prints through the normal label

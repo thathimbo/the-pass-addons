@@ -57,7 +57,7 @@ def main():
     os.environ.update(env)
     Path(env["PASS_OUT"]).mkdir(parents=True, exist_ok=True)
     shown = {k: ("***" if k == "PASS_TOKEN" and v else v) for k, v in env.items()}
-    print("The Pass add-on config:", json.dumps(shown, indent=1), file=sys.stderr, flush=True)
+    print("HTC add-on config:", json.dumps(shown, indent=1), file=sys.stderr, flush=True)
     from .__main__ import main as serve
     serve()
 
