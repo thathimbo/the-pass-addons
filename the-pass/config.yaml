@@ -1,5 +1,5 @@
 name: HTC (Himbo Task Control)
-version: "0.3.1"
+version: "0.3.2"
 slug: the_pass
 description: HTC (formerly The Pass). Scan-only kitchen-island task loop. Cards (4x6 labels) are projects, receipt slips are tasks.
 url: https://github.com/thathimbo/the-pass-addons

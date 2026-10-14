@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+- Card is an exact half fold: the strip (title, stack, tasks, due, QR + code, steps) fills the top half; the fold line sits at exactly half the card height; only notes print below the fold.
+- Removed the old back-panel heading from the card.
+
 ## 0.3.1
 - `PATCH /api/projects/{id}` takes `status` (backlog, todo, in_progress, ready_to_close, closed, or new/active/done/archived) and `via`; emits `project.status_changed` with `via`.
 - `DELETE /api/projects/{id}` removes a project with its tasks, slips and retro.
@@ -8,7 +12,7 @@
 - Renamed to **HTC (Himbo Task Control)** in the add-on name, sidebar, page titles and printouts.
   The slug (`the_pass`), entity ids, event names and API paths are unchanged.
 - Cards are now the HTC flight-progress strip: 6x4 landscape, strip on top (callsign, stack,
-  task count, due, QR, first four steps), fold line, full flight plan + notes on the tab.
+  task count, due, QR, first four steps), fold line, full step list + notes on the tab.
 - Projects have an optional `due` (POST/PATCH /api/projects); print-card passes due, stack and steps.
 
 ## 0.2.2

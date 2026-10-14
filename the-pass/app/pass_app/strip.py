@@ -1,10 +1,11 @@
 """HTC flight-progress-strip card: 6x4 in landscape (1218x812 @ 203 dpi).
-Top 264 px is the strip that shows in the rack; dashed fold line; the rest is the tab."""
+Exact half fold: the strip fills the top half (0-406 px), the fold line sits at 406, notes only below."""
 from __future__ import annotations
 from PIL import Image, ImageDraw
 from .render import font, qr_image, wrap
 
-W, H, FOLD = 1218, 812, 264
+W, H = 1218, 812
+FOLD = H // 2  # 406: exact half fold
 M = 10
 
 
@@ -63,8 +64,8 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     # --- column B (ADEP-style): QR + code
     bx1 = ax1 + 220
     d.line([bx1, y0, bx1, y1], fill=0, width=4)
-    q = qr_image(code, 190)
-    img.paste(q, (ax1 + (220 - q.width) // 2, y0 + 4))
+    q = qr_image(code, 200)
+    img.paste(q, (ax1 + (220 - q.width) // 2, y0 + max(4, (y1 - y0 - 50 - q.height) // 2)))
     ctext(d, (ax1 + bx1) / 2, y1 - 22, code, font(30, True, True))
     # --- column C: phase boxes, label row + diagonal est/actual cells
     ox0 = W - M - 140
@@ -82,7 +83,7 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
             name, est, actual = shown[i]
             d.text((x0 + 6, y0 + 4), f"{i + 1:02d}", font=font(18, True), fill=0)
             up = name.upper()
-            for sz in (16, 15, 14, 13, 12, 11):
+            for sz in (22, 20, 18, 16, 15, 14, 13, 12, 11):
                 lf = font(sz, True)
                 if all(d.textlength(w, font=lf) <= pw - 10 for w in up.split()):
                     break
@@ -94,7 +95,7 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
                         w = w[:-2] + "."
                     ws.append(w)
                 up = " ".join(ws)
-            lines = wrap(d, up, lf, int(pw - 10))[:3]
+            lines = wrap(d, up, lf, int(pw - 10))[:max(3, (mid - y0 - 36) // (sz + 3))]
             for j, ln in enumerate(lines):
                 d.text((x0 + 6, y0 + 28 + j * (sz + 3)), ln, font=lf, fill=0)
             d.line([x0 + 2, y1 - 2, x1 - 2, mid + 2], fill=0, width=2)
@@ -115,26 +116,10 @@ def strip_card(*, code, title, kind, stack, due, steps, notes, other, printed):
     while x < W:
         d.line([x, FOLD, x + 18, FOLD], fill=0, width=3)
         x += 30
-    d.text((W - 300, FOLD + 6), "FOLD HERE  ✂  STRIP ABOVE", font=font(16, True), fill=0)
-    # --- tab / back: full flight plan
-    ty = FOLD + 40
-    d.text((40, ty), f"FLIGHT PLAN  ·  {title}", font=font(30, True), fill=0)
-    ty += 50
-    d.line([40, ty, W - 40, ty], fill=0, width=3)
-    ty += 14
-    for i, (name, est, actual) in enumerate(steps[:9]):
-        mark = "[x]" if actual else "[ ]"
-        d.text((40, ty), f"{mark} {i + 1:02d}  {name}", font=font(24, False), fill=0)
-        if est:
-            d.text((760, ty), f"est {est}", font=font(20), fill=0)
-        ty += 34
-    nx = 900
-    d.line([nx - 20, FOLD + 100, nx - 20, H - 70], fill=0, width=2)
-    d.text((nx, FOLD + 104), "NOTES", font=font(20, True), fill=0)
-    for j, ln in enumerate(wrap(d, notes, font(20), W - nx - 40)[:10]):
-        d.text((nx, FOLD + 134 + j * 26), ln, font=font(20), fill=0)
-    d.text((40, H - 46), f"HTC  ·  Himbo Task Control  ·  printed {printed}", font=font(20, True), fill=0)
-    ctext(d, W - 110, H - 36, "HTC", font(34, True))
-    box(d, W - 170, H - 62, W - 50, H - 12, 3)
+    # --- below the fold: notes only
+    d.text((40, FOLD + 16), "NOTES", font=font(20, True), fill=0)
+    nf = font(26)
+    for k, ln in enumerate(wrap(d, notes or "", nf, W - 80)[:11]):
+        d.text((40, FOLD + 48 + k * 32), ln, font=nf, fill=0)
     return img.point(lambda v: 0 if v < 128 else 255, "1")
 
