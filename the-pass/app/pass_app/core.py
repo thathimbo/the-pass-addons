@@ -198,6 +198,38 @@ class Pass:
                                 source=source, external_id=external_id)
         return {"project": p, "task": p["tasks"][0] if p["tasks"] else None}
 
+    STATUS_ALIASES = {"new": "backlog", "active": "in_progress", "done": "closed", "archived": "closed"}
+    STATUSES = ("backlog", "todo", "in_progress", "ready_to_close", "closed")
+
+    def set_project_status(self, pid: int, status: str, via: str = "") -> dict:
+        """Set a project's status directly (sync from another app). Aliases: new, active, done, archived."""
+        st = self.STATUS_ALIASES.get((status or "").strip().lower(), (status or "").strip().lower())
+        if st not in self.STATUSES:
+            raise PassError(f"unknown status {status!r}")
+        with self.lock, self.db.tx():
+            p = self.project(pid)
+            if p["status"] == st:
+                return self.project_view(pid)
+            old = p["status"]
+            stamps = {"closed_at": now()} if st == "closed" else {}
+            if st == "closed":
+                self.db.run("UPDATE slips SET status='void', resolved_at=? WHERE project_id=? AND status='open'",
+                            now(), pid)
+            sets = ["status=?", "updated_at=?"] + [f"{k}=?" for k in stamps]
+            self.db.run(f"UPDATE projects SET {', '.join(sets)} WHERE id=?", st, now(), *stamps.values(), pid)
+            self.events.emit("project.status_changed", {"project": self.project(pid), "from": old, "to": st,
+                                                        "via": via or "api"})
+            return self.project_view(pid)
+
+    def delete_project(self, pid: int) -> dict:
+        with self.lock, self.db.tx():
+            p = self.project(pid)
+            for t in ("slips", "retros", "tasks"):
+                self.db.run(f"DELETE FROM {t} WHERE project_id=?", pid)
+            self.db.run("DELETE FROM projects WHERE id=?", pid)
+            self.events.emit("project.deleted", {"project": p})
+            return {"deleted": pid}
+
     def update_project(self, pid: int, **fields) -> dict:
         allowed = {k: v for k, v in fields.items() if k in ("title", "notes", "due") and v is not None}
         with self.lock, self.db.tx():

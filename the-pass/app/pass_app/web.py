@@ -47,6 +47,8 @@ class ProjectPatch(BaseModel):
     title: Optional[str] = None
     notes: Optional[str] = None
     due: Optional[str] = None
+    status: Optional[str] = None
+    via: Optional[str] = None
 
 
 class TaskPatch(BaseModel):
@@ -225,7 +227,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.patch("/api/projects/{pid}", tags=["projects"], dependencies=[Depends(auth)])
     def patch_project(pid: int, body: ProjectPatch):
-        return core.update_project(pid, **body.model_dump())
+        """Edit title/notes/due. `status` (backlog|todo|in_progress|ready_to_close|closed, or new|active|done|archived)
+        sets the status directly; `via` names the app that asked (echoed in project.status_changed)."""
+        d = body.model_dump()
+        st, via = d.pop("status"), d.pop("via")
+        out = core.update_project(pid, **d)
+        if st:
+            out = core.set_project_status(pid, st, via or "")
+        return out
+
+    @app.delete("/api/projects/{pid}", tags=["projects"], dependencies=[Depends(auth)])
+    def delete_project(pid: int):
+        """Delete a project with its tasks, slips and retro (printouts and event history stay)."""
+        return core.delete_project(pid)
 
     @app.post("/api/projects/{pid}/tasks", tags=["projects"], dependencies=[Depends(auth)], status_code=201)
     def add_task(pid: int, body: TaskIn):

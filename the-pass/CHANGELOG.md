@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+- `PATCH /api/projects/{id}` takes `status` (backlog, todo, in_progress, ready_to_close, closed, or new/active/done/archived) and `via`; emits `project.status_changed` with `via`.
+- `DELETE /api/projects/{id}` removes a project with its tasks, slips and retro.
+
 ## 0.3.0
 - Renamed to **HTC (Himbo Task Control)** in the add-on name, sidebar, page titles and printouts.
   The slug (`the_pass`), entity ids, event names and API paths are unchanged.
